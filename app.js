@@ -69,7 +69,7 @@ let me = null;
 let profile = null;
 let labels = [];
 
-const VIEWS = ["authView", "profileView", "listView", "formView"];
+const VIEWS = ["authView", "profileView", "listView", "formView", "previewView"];
 function show(id) {
   VIEWS.forEach((v) => ($("#" + v).hidden = v !== id));
   scrollTo(0, 0);
@@ -355,15 +355,53 @@ function shrink(file, max, q) {
   });
 }
 
-// ---------------- print ----------------
-function buildPrint() { $("#printArea").innerHTML = labels.map((l) => labelHTML(profile, l)).join(""); }
+// ---------------- preview / print ----------------
+// Pages are split here (not by the browser) so the preview and the printout are identical.
+const PAGE_INNER_PT = (297 - 20) / 25.4 * 72;   // A4 height minus 10mm top and bottom
+const GAP_PT = 18;
 
-$("#printBtn").addEventListener("click", async () => {
-  buildPrint();
+function buildPages() {
+  const m = $("#measure");
+  m.innerHTML = labels.map((l) => labelHTML(profile, l)).join("");
+  const heights = [...m.children].map((el) => el.getBoundingClientRect().height * 0.75);
+  const pages = [];
+  let cur = [], used = 0;
+  labels.forEach((l, i) => {
+    const h = heights[i] + (cur.length ? GAP_PT : 0);
+    if (cur.length && used + h > PAGE_INNER_PT) { pages.push(cur); cur = []; used = 0; }
+    used += cur.length ? h : heights[i];
+    cur.push(l);
+  });
+  if (cur.length) pages.push(cur);
+  m.innerHTML = "";
+  return pages.map((p) => `<div class="page">${p.map((l) => labelHTML(profile, l)).join("")}</div>`);
+}
+
+const PAGE_PX = 210 / 25.4 * 96;
+function fitPages() {
+  const box = $("#previewPages");
+  const z = Math.min(1, box.clientWidth / PAGE_PX);
+  box.querySelectorAll(".page").forEach((p) => (p.style.zoom = z));
+}
+new ResizeObserver(fitPages).observe($("#previewPages"));
+
+function openPreview() {
+  const pages = buildPages();
+  $("#previewPages").innerHTML = pages.join("");
+  $("#printArea").innerHTML = pages.join("");
+  $("#pageCount").textContent = `A4 ${pages.length}枚・ラベル${labels.length}枚`;
+  show("previewView");
+  fitPages();
+}
+
+$("#printBtn").addEventListener("click", openPreview);
+$("#previewBack").addEventListener("click", () => show("listView"));
+$("#doPrint").addEventListener("click", async () => {
   await Promise.all([...document.querySelectorAll("#printArea img")].map((i) => i.decode().catch(() => {})));
   const prev = document.title;
   document.title = `作品ラベル_${nameLine(profile).replace(/　/g, "")}`;
   window.print();
   document.title = prev;
 });
-window.addEventListener("beforeprint", buildPrint);
+// Ctrl+P from any screen still prints the current labels
+window.addEventListener("beforeprint", () => { if (labels.length) $("#printArea").innerHTML = buildPages().join(""); });

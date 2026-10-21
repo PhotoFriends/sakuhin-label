@@ -96,16 +96,23 @@ label.f { display: block; font-size: 13px; margin-bottom: 12px; }
 
 #measure { position: absolute; left: -9999px; top: 0; visibility: hidden; }
 
+/* ---- A4 pages (preview and print share the same markup) ---- */
+.page {
+  width: 210mm; height: 297mm; padding: 10mm; background: #fff; overflow: hidden;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.page .label + .label { margin-top: 18pt; }
+.toolbar.sticky { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 8px 0; margin-bottom: 4px; }
+#previewPages { display: flex; flex-direction: column; align-items: center; gap: 16px; padding-bottom: 32px; }
+#previewPages .page { box-shadow: 0 1px 6px rgba(0,0,0,.25); }
+
 /* ---- print ---- */
 #printArea { display: none; }
-@page { size: A4 portrait; margin: 10mm; }
+@page { size: A4 portrait; margin: 0; }
 @media print {
   body { background: #fff; }
   #screen, #measure { display: none; }
   #printArea { display: block; }
-  #printArea .label {
-    margin-bottom: 18pt;
-    break-inside: avoid; page-break-inside: avoid;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact;
-  }
+  #printArea .page { break-after: page; page-break-after: always; }
+  #printArea .page:last-child { break-after: auto; page-break-after: auto; }
 }
