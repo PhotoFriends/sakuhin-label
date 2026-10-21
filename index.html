@@ -70,10 +70,11 @@
   <section id="previewView" class="main" hidden>
     <div class="toolbar sticky">
       <button id="previewBack" class="ghost">← 戻る</button>
-      <button id="doPrint" class="primary">印刷・PDFに保存</button>
+      <button id="doPdf" class="primary">PDFをダウンロード</button>
+      <button id="doPrint">印刷</button>
       <span id="pageCount" class="note"></span>
     </div>
-    <p class="hint">「印刷・PDFに保存」を押して、印刷画面の送信先で「PDFに保存」を選ぶとPDFになります。</p>
+    <p id="pdfMsg" class="hint"></p>
     <div id="previewPages"></div>
   </section>
 
@@ -121,6 +122,7 @@
 
 <div id="printArea"></div>
 <div id="measure" aria-hidden="true"></div>
+<div id="pdfStage" aria-hidden="true"></div>
 <script type="module" src="app.js"></script>
 </body>
 </html>

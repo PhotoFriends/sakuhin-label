@@ -390,18 +390,64 @@ function openPreview() {
   $("#previewPages").innerHTML = pages.join("");
   $("#printArea").innerHTML = pages.join("");
   $("#pageCount").textContent = `A4 ${pages.length}枚・ラベル${labels.length}枚`;
+  $("#pdfMsg").textContent = "";
   show("previewView");
   fitPages();
 }
 
 $("#printBtn").addEventListener("click", openPreview);
 $("#previewBack").addEventListener("click", () => show("listView"));
-$("#doPrint").addEventListener("click", async () => {
-  await Promise.all([...document.querySelectorAll("#printArea img")].map((i) => i.decode().catch(() => {})));
+const fileBase = () => `作品ラベル_${nameLine(profile).replace(/　/g, "")}`;
+
+// print() must run directly inside the click (no await before it) or Safari ignores it.
+$("#doPrint").addEventListener("click", () => {
   const prev = document.title;
-  document.title = `作品ラベル_${nameLine(profile).replace(/　/g, "")}`;
+  document.title = fileBase();
   window.print();
   document.title = prev;
+});
+
+// Real PDF file: each page is rendered by the browser itself (SVG foreignObject) at 300dpi
+// and placed on an A4 page, so the fonts and layout match the preview exactly.
+const loadScript = (src) => new Promise((res, rej) => {
+  const s = document.createElement("script");
+  s.src = src; s.onload = res; s.onerror = () => rej(new Error("load " + src));
+  document.head.append(s);
+});
+let pdfLibs;
+const getPdfLibs = () => (pdfLibs ??= Promise.all([
+  loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"),
+  loadScript("https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"),
+]).catch((e) => { pdfLibs = null; throw e; }));
+
+$("#doPdf").addEventListener("click", async () => {
+  const btn = $("#doPdf"), msg = $("#pdfMsg");
+  btn.disabled = true;
+  msg.textContent = "PDFを作成中…";
+  const stage = $("#pdfStage");
+  try {
+    await getPdfLibs();
+    stage.innerHTML = buildPages().join("");
+    await document.fonts?.ready;
+    const pages = [...stage.children];
+    const pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
+    for (let i = 0; i < pages.length; i++) {
+      msg.textContent = `PDFを作成中… ${i + 1}/${pages.length}`;
+      const canvas = await window.htmlToImage.toCanvas(pages[i], {
+        pixelRatio: 300 / 96, backgroundColor: "#fff", skipFonts: true, cacheBust: false,
+      });
+      if (i) pdf.addPage("a4", "portrait");
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, 210, 297, undefined, "FAST");
+    }
+    pdf.save(fileBase() + ".pdf");
+    msg.textContent = "PDFをダウンロードしました。";
+  } catch (e) {
+    console.error(e);
+    msg.textContent = "PDFを作成できませんでした。「印刷」から「PDFに保存」を選んでください。";
+  } finally {
+    stage.innerHTML = "";
+    btn.disabled = false;
+  }
 });
 // Ctrl+P from any screen still prints the current labels
 window.addEventListener("beforeprint", () => { if (labels.length) $("#printArea").innerHTML = buildPages().join(""); });

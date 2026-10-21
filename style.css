@@ -95,6 +95,7 @@ label.f { display: block; font-size: 13px; margin-bottom: 12px; }
 .label .over { background: #ffd6d6; }
 
 #measure { position: absolute; left: -9999px; top: 0; visibility: hidden; }
+#pdfStage { position: fixed; left: -10000px; top: 0; }
 
 /* ---- A4 pages (preview and print share the same markup) ---- */
 .page {
@@ -108,11 +109,17 @@ label.f { display: block; font-size: 13px; margin-bottom: 12px; }
 
 /* ---- print ---- */
 #printArea { display: none; }
-@page { size: A4 portrait; margin: 0; }
+/* The page margin comes from @page; printed .page boxes have no fixed size, so a browser
+   that adds its own margins still cannot push the labels off the paper. */
+@page { size: A4 portrait; margin: 10mm; }
 @media print {
   body { background: #fff; }
-  #screen, #measure { display: none; }
+  #screen, #measure, #pdfStage { display: none; }
   #printArea { display: block; }
-  #printArea .page { break-after: page; page-break-after: always; }
+  #printArea .page {
+    width: auto; height: auto; padding: 0; overflow: visible;
+    break-after: page; page-break-after: always;
+  }
+  #printArea .label { break-inside: avoid; page-break-inside: avoid; }
   #printArea .page:last-child { break-after: auto; page-break-after: auto; }
 }
