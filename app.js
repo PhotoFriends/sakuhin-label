@@ -133,6 +133,7 @@ const AUTH_ERR = {
   "auth/too-many-requests": "しばらく待ってからもう一度試してください",
   "auth/network-request-failed": "通信できませんでした",
   "auth/operation-not-allowed": "登録の受付が設定されていません（管理者に連絡してください）",
+  "auth/configuration-not-found": "ログイン機能が設定されていません（管理者に連絡してください）",
 };
 
 $("#authForm").addEventListener("submit", async (e) => {
@@ -146,7 +147,7 @@ $("#authForm").addEventListener("submit", async (e) => {
   msg.textContent = "";
   $("#authSubmit").disabled = true;
   try { await (mode === "signup" ? store.signup(user, pass) : store.login(user, pass)); }
-  catch (err) { msg.textContent = AUTH_ERR[err.code] || "エラーが発生しました"; console.error(err); }
+  catch (err) { msg.textContent = AUTH_ERR[err.code] || `エラーが発生しました（${err.code || err.message}）`; console.error(err); }
   finally { $("#authSubmit").disabled = false; }
 });
 
