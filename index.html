@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>作品ラベル</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="screen">
+  <header class="bar">
+    <h1>作品ラベル</h1>
+    <div class="bar-right" id="barRight" hidden>
+      <button id="profileBtn" class="ghost"><span id="who"></span></button>
+      <button id="logoutBtn" class="ghost">ログアウト</button>
+    </div>
+  </header>
+
+  <!-- ログイン / 新規登録 -->
+  <section id="authView" class="panel-wrap" hidden>
+    <div class="panel">
+      <div class="tabs">
+        <button data-mode="login" class="on">ログイン</button>
+        <button data-mode="signup">新規登録</button>
+      </div>
+      <form id="authForm">
+        <label class="f">ユーザー名<input id="authUser" autocomplete="username" required placeholder="半角英数字 3〜20文字"></label>
+        <label class="f">パスワード<input id="authPass" type="password" autocomplete="current-password" required minlength="6" placeholder="6文字以上"></label>
+        <label class="f" id="pass2Wrap" hidden>パスワード（確認）<input id="authPass2" type="password" autocomplete="new-password" minlength="6"></label>
+        <p id="authMsg" class="msg"></p>
+        <button type="submit" id="authSubmit" class="primary wide">ログイン</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- 学年・氏名 -->
+  <section id="profileView" class="panel-wrap" hidden>
+    <form class="panel" id="profileForm">
+      <h2>学年と氏名</h2>
+      <p class="note">ラベルの左上に入ります。</p>
+      <label class="f">学年
+        <span class="row"><input id="pGrade" inputmode="numeric" required maxlength="2" class="short">年</span>
+      </label>
+      <div class="row2">
+        <label class="f">姓<input id="pSei" required maxlength="10"></label>
+        <label class="f">名<input id="pMei" required maxlength="10"></label>
+      </div>
+      <div class="preview-box"><div class="name-preview" id="pPreview"></div></div>
+      <p id="profileMsg" class="msg"></p>
+      <div class="actions">
+        <button type="button" id="profileCancel" class="ghost">キャンセル</button>
+        <button type="submit" class="primary">登録</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- 作品一覧（ラベル） -->
+  <section id="listView" class="main" hidden>
+    <div class="toolbar">
+      <button id="addBtn" class="primary">＋ 作品を提出</button>
+      <button id="printBtn">PDF書き出し・印刷</button>
+    </div>
+    <div id="labels"></div>
+    <p class="hint">印刷画面で「送信先：PDFに保存」を選ぶとPDFになります。「ヘッダーとフッター」はオフにしてください。</p>
+  </section>
+
+  <!-- 作品の提出フォーム -->
+  <section id="formView" class="panel-wrap" hidden>
+    <form class="panel wide-panel" id="workForm" novalidate>
+      <h2 id="formTitle">作品を提出</h2>
+
+      <div class="q">
+        <div class="q-head"><span class="q-no">1</span>作品のタイトル<span class="req">必須</span></div>
+        <p class="note">『』は自動で付きます。</p>
+        <input id="wTitle" autocomplete="off">
+        <p class="warn" id="titleWarn"></p>
+      </div>
+
+      <div class="q">
+        <div class="q-head"><span class="q-no">2</span>作品のコメント</div>
+        <p class="note">2行まで。改行もそのまま反映されます。</p>
+        <textarea id="wComment" rows="3"></textarea>
+        <p class="warn" id="commentWarn"></p>
+      </div>
+
+      <div class="q">
+        <div class="q-head"><span class="q-no">3</span>作品の写真<span class="req">必須</span></div>
+        <div class="photo-pick">
+          <label class="file-btn">写真を選ぶ<input type="file" id="wPhoto" accept="image/*" hidden></label>
+          <span id="photoName" class="note"></span>
+        </div>
+        <p class="warn" id="photoWarn"></p>
+      </div>
+
+      <div class="q">
+        <div class="q-head">ラベルのプレビュー</div>
+        <div class="fit" id="formPreview"></div>
+      </div>
+
+      <p id="formMsg" class="msg"></p>
+      <div class="actions">
+        <button type="button" id="formCancel" class="ghost">キャンセル</button>
+        <button type="submit" id="formSubmit" class="primary">提出</button>
+      </div>
+    </form>
+  </section>
+</div>
+
+<div id="printArea"></div>
+<div id="measure" aria-hidden="true"></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
