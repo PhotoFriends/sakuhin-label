@@ -87,8 +87,32 @@ function labelHTML(p, l) {
     <div class="c-name">${esc(nameLine(p))}</div>
     <div class="c-title">『${esc(l.title)}』</div>
     <div class="c-comment"><div class="cm">${esc((l.comment || "").replace(/\s+$/, ""))}</div></div>
-    <div class="c-photo">${l.photo ? `<img src="${l.photo}" alt="">` : ""}</div>
+    <div class="c-photo">${l.photo ? `<img src="${thumbs.get(l.photo) || l.photo}" alt="">` : ""}</div>
   </div>`;
+}
+
+// The photo cell is under 2cm wide, so a ~400px copy is plenty even at print resolution.
+// Rendering the full uploads made the preview and the PDF very slow on phones.
+const thumbs = new Map();
+function makeThumb(src, max = 400) {
+  return new Promise((res) => {
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth * s);
+      c.height = Math.round(img.naturalHeight * s);
+      const ctx = c.getContext("2d");
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      res(c.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = () => res(src);
+    img.src = src;
+  });
+}
+async function ensureThumbs(list) {
+  for (const l of list) if (l.photo && !thumbs.has(l.photo)) thumbs.set(l.photo, await makeThumb(l.photo));
 }
 
 // Labels are laid out at their real printed size (pt); on screen they are scaled to the box width.
@@ -206,6 +230,9 @@ function renderList() {
     return;
   }
   $("#printBtn").disabled = false;
+  if (labels.some((l) => l.photo && !thumbs.has(l.photo))) {
+    ensureThumbs(labels).then(() => { if (!$("#listView").hidden) renderList(); });
+  }
   box.innerHTML = "";
   labels.forEach((l, i) => {
     const item = document.createElement("div");
@@ -300,7 +327,7 @@ $("#wPhoto").addEventListener("change", async (e) => {
   $("#photoWarn").textContent = "";
   $("#photoName").textContent = "読み込み中…";
   try {
-    draft.photo = await shrink(f, 1200, 0.85);
+    draft.photo = await shrink(f, 800, 0.85);
     $("#photoName").textContent = f.name;
     validate();
   } catch (err) {
@@ -385,7 +412,11 @@ function fitPages() {
 }
 new ResizeObserver(fitPages).observe($("#previewPages"));
 
-function openPreview() {
+async function openPreview() {
+  const btn = $("#printBtn");
+  btn.disabled = true;
+  await ensureThumbs(labels);
+  btn.disabled = false;
   const pages = buildPages();
   $("#previewPages").innerHTML = pages.join("");
   $("#printArea").innerHTML = pages.join("");
@@ -407,7 +438,7 @@ $("#doPrint").addEventListener("click", () => {
   document.title = prev;
 });
 
-// Real PDF file: each page is rendered by the browser itself (SVG foreignObject) at 300dpi
+// Real PDF file: each page is rendered by the browser itself (SVG foreignObject) at ~240dpi
 // and placed on an A4 page, so the fonts and layout match the preview exactly.
 const loadScript = (src) => new Promise((res, rej) => {
   const s = document.createElement("script");
@@ -426,7 +457,7 @@ $("#doPdf").addEventListener("click", async () => {
   msg.textContent = "PDFを作成中…";
   const stage = $("#pdfStage");
   try {
-    await getPdfLibs();
+    await Promise.all([getPdfLibs(), ensureThumbs(labels)]);
     stage.innerHTML = buildPages().join("");
     await document.fonts?.ready;
     const pages = [...stage.children];
@@ -434,10 +465,11 @@ $("#doPdf").addEventListener("click", async () => {
     for (let i = 0; i < pages.length; i++) {
       msg.textContent = `PDFを作成中… ${i + 1}/${pages.length}`;
       const canvas = await window.htmlToImage.toCanvas(pages[i], {
-        pixelRatio: 300 / 96, backgroundColor: "#fff", skipFonts: true, cacheBust: false,
+        pixelRatio: 2.5, backgroundColor: "#fff", skipFonts: true, cacheBust: false,
       });
       if (i) pdf.addPage("a4", "portrait");
-      pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, 210, 297, undefined, "FAST");
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.85), "JPEG", 0, 0, 210, 297, undefined, "FAST");
+      canvas.width = canvas.height = 0;   // free the bitmap right away (iOS memory limit)
     }
     pdf.save(fileBase() + ".pdf");
     msg.textContent = "PDFをダウンロードしました。";
