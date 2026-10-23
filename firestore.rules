@@ -1,11 +1,20 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 各ユーザーは自分のプロフィールとラベルだけ読み書きできる
+    // 管理者（ユーザー名 admin）のアカウント
+    function isAdmin() {
+      return request.auth != null && request.auth.uid == "NaKDuY4JQXQVK7iBfFoixa6TDqx1";
+    }
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+    // 各ユーザーは自分のプロフィールとラベルだけ読み書きできる。管理者は全員分を読める
     match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if isOwner(uid);
       match /labels/{labelId} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read: if isOwner(uid) || isAdmin();
+        allow write: if isOwner(uid);
       }
     }
   }

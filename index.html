@@ -66,6 +66,19 @@
     <div id="labels"></div>
   </section>
 
+  <!-- 管理者：全員のラベル -->
+  <section id="adminView" class="main" hidden>
+    <div class="toolbar sticky">
+      <button id="adminPreview" class="primary" disabled>選択したラベルをプレビュー（0枚）</button>
+      <button id="adminAll" class="ghost">すべて選択</button>
+      <button id="adminNone" class="ghost">選択を解除</button>
+      <button id="adminReload" class="ghost">再読み込み</button>
+      <span id="adminSummary" class="note"></span>
+    </div>
+    <p class="hint">名前の左のチェックでその生徒の全作品を選択。名前を押すと作品が開き、1枚ずつ選べます。</p>
+    <div id="adminList"></div>
+  </section>
+
   <!-- 印刷プレビュー -->
   <section id="previewView" class="main" hidden>
     <div class="toolbar sticky">

@@ -31,6 +31,11 @@ async function firebaseBackend() {
     },
     save: (uid, l) => { const { id, ...data } = l; return fs.setDoc(fs.doc(col(uid), id), data); },
     remove: (uid, id) => fs.deleteDoc(fs.doc(col(uid), id)),
+    // admin only (allowed by firestore.rules)
+    async listAll() {
+      const snap = await fs.getDocs(fs.collection(db, "users"));
+      return Promise.all(snap.docs.map(async (d) => ({ uid: d.id, profile: d.data(), labels: await this.list(d.id) })));
+    },
   };
 }
 
@@ -58,6 +63,10 @@ function localBackend() {
     async list(uid) { return Object.values(read().users[uid].labels).sort((a, b) => a.order - b.order); },
     async save(uid, l) { const s = read(); s.users[uid].labels[l.id] = l; write(s); },
     async remove(uid, id) { const s = read(); delete s.users[uid].labels[id]; write(s); },
+    async listAll() {
+      return Object.entries(read().users || {}).filter(([, u]) => u.profile)
+        .map(([uid, u]) => ({ uid, profile: u.profile, labels: Object.values(u.labels).sort((a, b) => a.order - b.order) }));
+    },
   };
 }
 
@@ -65,11 +74,13 @@ const useLocal = !firebaseConfig || new URLSearchParams(location.search).has("lo
 const store = useLocal ? localBackend() : await firebaseBackend();
 
 // ---------------- state ----------------
+const ADMIN_USER = "admin";
 let me = null;
 let profile = null;
 let labels = [];
+const isAdmin = () => me?.name === ADMIN_USER;
 
-const VIEWS = ["authView", "profileView", "listView", "formView", "previewView"];
+const VIEWS = ["authView", "profileView", "listView", "formView", "previewView", "adminView"];
 function show(id) {
   VIEWS.forEach((v) => ($("#" + v).hidden = v !== id));
   scrollTo(0, 0);
@@ -182,6 +193,8 @@ store.onUser(async (u) => {
   $("#barRight").hidden = !u;
   if (!u) { profile = null; labels = []; $("#authPass").value = ""; $("#authPass2").value = ""; show("authView"); return; }
   $("#who").textContent = u.name;
+  $("#profileBtn").disabled = isAdmin();
+  if (isAdmin()) return openAdmin();
   try {
     [profile, labels] = await Promise.all([store.getProfile(u.uid), store.list(u.uid)]);
   } catch (e) {
@@ -216,6 +229,7 @@ $("#profileForm").addEventListener("submit", async (e) => {
   if (!p.sei || !p.mei) { msg.textContent = "姓と名を入力してください"; return; }
   if (checkFit(p, { title: "" }).name) { msg.textContent = "氏名が長すぎてラベルに収まりません"; return; }
   const btn = e.submitter; btn.disabled = true;
+  p.user = me.name;   // lets the admin screen show the login name
   try { await store.saveProfile(me.uid, p); profile = p; show("listView"); }
   catch (err) { console.error(err); msg.textContent = "保存できませんでした"; }
   finally { btn.disabled = false; }
@@ -382,26 +396,31 @@ function shrink(file, max, q) {
   });
 }
 
+
 // ---------------- preview / print ----------------
 // Pages are split here (not by the browser) so the preview and the printout are identical.
+// Items are { p: profile, l: label } so the admin can mix labels from many students.
 const PAGE_INNER_PT = (297 - 20) / 25.4 * 72;   // A4 height minus 10mm top and bottom
 const GAP_PT = 18;
+let printItems = [];
+let previewFrom = "listView";
+let printName = "";
 
-function buildPages() {
+function buildPages(items = printItems) {
   const m = $("#measure");
-  m.innerHTML = labels.map((l) => labelHTML(profile, l)).join("");
+  m.innerHTML = items.map((x) => labelHTML(x.p, x.l)).join("");
   const heights = [...m.children].map((el) => el.getBoundingClientRect().height * 0.75);
   const pages = [];
   let cur = [], used = 0;
-  labels.forEach((l, i) => {
+  items.forEach((x, i) => {
     const h = heights[i] + (cur.length ? GAP_PT : 0);
     if (cur.length && used + h > PAGE_INNER_PT) { pages.push(cur); cur = []; used = 0; }
     used += cur.length ? h : heights[i];
-    cur.push(l);
+    cur.push(x);
   });
   if (cur.length) pages.push(cur);
   m.innerHTML = "";
-  return pages.map((p) => `<div class="page">${p.map((l) => labelHTML(profile, l)).join("")}</div>`);
+  return pages.map((p) => `<div class="page">${p.map((x) => labelHTML(x.p, x.l)).join("")}</div>`);
 }
 
 const PAGE_PX = 210 / 25.4 * 96;
@@ -412,23 +431,24 @@ function fitPages() {
 }
 new ResizeObserver(fitPages).observe($("#previewPages"));
 
-async function openPreview() {
-  const btn = $("#printBtn");
-  btn.disabled = true;
-  await ensureThumbs(labels);
-  btn.disabled = false;
+async function openPreview(items, from, name, btn) {
+  if (btn) btn.disabled = true;
+  await ensureThumbs(items.map((x) => x.l));
+  if (btn) btn.disabled = false;
+  printItems = items; previewFrom = from; printName = name;
   const pages = buildPages();
   $("#previewPages").innerHTML = pages.join("");
   $("#printArea").innerHTML = pages.join("");
-  $("#pageCount").textContent = `A4 ${pages.length}枚・ラベル${labels.length}枚`;
+  $("#pageCount").textContent = `A4 ${pages.length}枚・ラベル${items.length}枚`;
   $("#pdfMsg").textContent = "";
   show("previewView");
   fitPages();
 }
 
-$("#printBtn").addEventListener("click", openPreview);
-$("#previewBack").addEventListener("click", () => show("listView"));
-const fileBase = () => `作品ラベル_${nameLine(profile).replace(/　/g, "")}`;
+$("#printBtn").addEventListener("click", (e) =>
+  openPreview(labels.map((l) => ({ p: profile, l })), "listView", nameLine(profile), e.currentTarget));
+$("#previewBack").addEventListener("click", () => show(previewFrom));
+const fileBase = () => `作品ラベル_${printName.replace(/　/g, "")}`;
 
 // print() must run directly inside the click (no await before it) or Safari ignores it.
 $("#doPrint").addEventListener("click", () => {
@@ -457,7 +477,7 @@ $("#doPdf").addEventListener("click", async () => {
   msg.textContent = "PDFを作成中…";
   const stage = $("#pdfStage");
   try {
-    await Promise.all([getPdfLibs(), ensureThumbs(labels)]);
+    await Promise.all([getPdfLibs(), ensureThumbs(printItems.map((x) => x.l))]);
     stage.innerHTML = buildPages().join("");
     await document.fonts?.ready;
     const pages = [...stage.children];
@@ -482,4 +502,110 @@ $("#doPdf").addEventListener("click", async () => {
   }
 });
 // Ctrl+P from any screen still prints the current labels
-window.addEventListener("beforeprint", () => { if (labels.length) $("#printArea").innerHTML = buildPages().join(""); });
+window.addEventListener("beforeprint", () => {
+  if (!isAdmin() && $("#previewView").hidden && labels.length) {
+    printItems = labels.map((l) => ({ p: profile, l }));
+  }
+  if (printItems.length) $("#printArea").innerHTML = buildPages().join("");
+});
+
+// ---------------- admin ----------------
+// Read-only view of every student's labels; any subset can be previewed and saved as one PDF.
+let students = [];            // [{ uid, profile, labels }]
+const picked = new Set();     // "uid/labelId"
+const key = (s, l) => `${s.uid}/${l.id}`;
+
+async function openAdmin() {
+  show("adminView");
+  $("#adminList").innerHTML = `<p class="hint">読み込み中…</p>`;
+  try { students = await store.listAll(); }
+  catch (e) {
+    console.error(e);
+    $("#adminList").innerHTML = `<p class="msg">読み込めませんでした（${esc(e.code || e.message)}）</p>`;
+    return;
+  }
+  students = students.filter((s) => s.labels.length)
+    .sort((a, b) => (Number(a.profile.grade) - Number(b.profile.grade))
+      || `${a.profile.sei}${a.profile.mei}`.localeCompare(`${b.profile.sei}${b.profile.mei}`, "ja"));
+  picked.clear();
+  renderAdmin();
+}
+
+function renderAdmin() {
+  const box = $("#adminList");
+  const total = students.reduce((n, s) => n + s.labels.length, 0);
+  $("#adminSummary").textContent = `${students.length}人・ラベル${total}枚`;
+  if (!students.length) { box.innerHTML = `<div class="empty">まだ作品がありません。</div>`; updatePicked(); return; }
+  box.innerHTML = "";
+  students.forEach((s) => {
+    const d = document.createElement("details");
+    d.className = "stu";
+    d.innerHTML = `
+      <summary>
+        <input type="checkbox" class="stu-check" aria-label="この生徒をすべて選択">
+        <span class="stu-name">${esc(nameLine(s.profile))}</span>
+        <span class="note">${s.profile.user ? esc(s.profile.user) + "・" : ""}${s.labels.length}枚</span>
+      </summary>
+      <div class="stu-labels"></div>`;
+    const check = $(".stu-check", d);
+    check.addEventListener("click", (e) => e.stopPropagation());
+    check.addEventListener("change", () => {
+      s.labels.forEach((l) => (check.checked ? picked.add(key(s, l)) : picked.delete(key(s, l))));
+      d.querySelectorAll(".lab-check").forEach((c) => (c.checked = check.checked));
+      updatePicked();
+    });
+    // labels (and their photos) are only rendered when a student is opened
+    d.addEventListener("toggle", async () => {
+      const wrap = $(".stu-labels", d);
+      if (!d.open || wrap.childElementCount) return;
+      await ensureThumbs(s.labels);
+      s.labels.forEach((l) => {
+        const row = document.createElement("label");
+        row.className = "lab-row";
+        row.innerHTML = `<input type="checkbox" class="lab-check"><div class="fit">${labelHTML(s.profile, l)}</div>`;
+        const c = $(".lab-check", row);
+        c.checked = picked.has(key(s, l));
+        c.addEventListener("change", () => { c.checked ? picked.add(key(s, l)) : picked.delete(key(s, l)); syncStudent(s, d); updatePicked(); });
+        wrap.append(row);
+        makeFit($(".fit", row));
+      });
+    });
+    s.el = d;
+    box.append(d);
+    syncStudent(s, d);
+  });
+  updatePicked();
+}
+
+function syncStudent(s, d) {
+  const n = s.labels.filter((l) => picked.has(key(s, l))).length;
+  const c = $(".stu-check", d);
+  c.checked = n === s.labels.length;
+  c.indeterminate = n > 0 && n < s.labels.length;
+}
+
+function updatePicked() {
+  $("#adminPreview").textContent = `選択したラベルをプレビュー（${picked.size}枚）`;
+  $("#adminPreview").disabled = !picked.size;
+}
+
+$("#adminAll").addEventListener("click", () => {
+  students.forEach((s) => s.labels.forEach((l) => picked.add(key(s, l))));
+  document.querySelectorAll("#adminList .lab-check").forEach((c) => (c.checked = true));
+  students.forEach((s) => syncStudent(s, s.el));
+  updatePicked();
+});
+$("#adminNone").addEventListener("click", () => {
+  picked.clear();
+  document.querySelectorAll("#adminList .lab-check").forEach((c) => (c.checked = false));
+  students.forEach((s) => syncStudent(s, s.el));
+  updatePicked();
+});
+$("#adminReload").addEventListener("click", openAdmin);
+$("#adminPreview").addEventListener("click", (e) => {
+  const items = [];
+  students.forEach((s) => s.labels.forEach((l) => { if (picked.has(key(s, l))) items.push({ p: s.profile, l }); }));
+  const who = new Set(items.map((x) => x.p));
+  const name = who.size === 1 ? nameLine(items[0].p) : `${who.size}人分`;
+  openPreview(items, "adminView", name, e.currentTarget);
+});

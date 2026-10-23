@@ -71,6 +71,16 @@ label.f { display: block; font-size: 13px; margin-bottom: 12px; }
 .ops button.armed { background: var(--red); border-color: var(--red); color: #fff; }
 .fit { overflow: hidden; }
 
+/* ---- admin ---- */
+.stu { background: #fff; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 8px; }
+.stu summary { display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; }
+.stu summary input { width: 18px; height: 18px; }
+.stu-name { font-family: var(--mincho); }
+.stu-labels { padding: 0 12px 12px; }
+.lab-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; cursor: pointer; }
+.lab-row input { width: 18px; height: 18px; flex: none; }
+.lab-row .fit { flex: 1; min-width: 0; }
+
 /* ---- label: fixed size, identical on screen and paper ---- */
 .label {
   display: grid;
