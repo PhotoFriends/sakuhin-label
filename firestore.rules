@@ -1,9 +1,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 管理者（ユーザー名 admin）のアカウント
+    // 管理者（ユーザー名 admin）のアカウント。umi-card 版と PhotoFriends 版の両プロジェクト分
     function isAdmin() {
-      return request.auth != null && request.auth.uid == "NaKDuY4JQXQVK7iBfFoixa6TDqx1";
+      return request.auth != null
+        && request.auth.uid in ["NaKDuY4JQXQVK7iBfFoixa6TDqx1", "vLM1SutB8NUtjSrBn4lt8EZF61u2"];
     }
     function isOwner(uid) {
       return request.auth != null && request.auth.uid == uid;
